@@ -192,7 +192,7 @@ if [ "$(docker ps -a --quiet --filter status=running --filter name=$CONTAINER_NA
     print_info "Attaching to running container: $CONTAINER_NAME"
     ISAAC_ROS_WS=$(docker exec $CONTAINER_NAME printenv ISAAC_ROS_WS)
     print_info "Docker workspace: $ISAAC_ROS_WS"
-    docker exec -i -t -u admin --workdir $ISAAC_ROS_WS $CONTAINER_NAME /bin/bash $@
+    docker exec -i -t -u root --workdir $ISAAC_ROS_WS $CONTAINER_NAME /bin/bash $@
     exit 0
 fi
 
@@ -284,14 +284,11 @@ docker run -it --rm \
     --privileged \
     --network host \
     --ipc=host \
-    --device /dev/gpiomem \
-    --device /dev/mem \
     ${DOCKER_ARGS[@]} \
     -v $ISAAC_ROS_DEV_DIR:/workspaces/isaac_ros-dev \
     -v /etc/localtime:/etc/localtime:ro \
     -v /dev/ttyUSB0:/dev/ttyUSB0:rw \
     -v /dev:/dev \
-    -v /sys:/sys \
     -v /proc/device-tree/compatible:/proc/device-tree/compatible \
     -v /proc/device-tree/chosen:/proc/device-tree/chosen \
     -e JETSON_MODEL_NAME=JETSON_ORIN_NANO \
@@ -300,6 +297,16 @@ docker run -it --rm \
     --runtime nvidia \
     --entrypoint /usr/local/bin/scripts/workspace-entrypoint.sh \
     --workdir /workspaces/isaac_ros-dev \
-    --group-add dialout \
+    -u root \
     $BASE_NAME \
     /bin/bash
+
+
+
+
+
+
+
+
+
+# docker container run -it --rm --runtime=nvidia --gpus all --privileged -v /proc/device-tree/compatible:/proc/device-tree/compatible -v /proc/device-tree/chosen:/proc/device-tree/chosen --device /dev/gpiochip0 testimg /bin/bash
