@@ -290,12 +290,7 @@ docker run -it --rm \
     -v $ISAAC_ROS_DEV_DIR:/workspaces/isaac_ros-dev \
     -v /etc/localtime:/etc/localtime:ro \
     -v /dev/ttyUSB0:/dev/ttyUSB0:rw \
-    -v /dev:/dev \
-    -v /sys:/sys \
-    -v /proc/device-tree/compatible:/proc/device-tree/compatible \
-    -v /proc/device-tree/chosen:/proc/device-tree/chosen \
-    -e JETSON_MODEL_NAME=JETSON_ORIN_NANO \
-    --device /dev/gpiochip0 \
+    -v /dev/ttyACM0:/dev/ttyACM0:rw \
     --name "$CONTAINER_NAME" \
     --runtime nvidia \
     --entrypoint /usr/local/bin/scripts/workspace-entrypoint.sh \

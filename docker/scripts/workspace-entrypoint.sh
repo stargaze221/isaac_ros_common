@@ -57,4 +57,18 @@ done
 # Restart udev daemon
 service udev restart
 
+
+# If you built a local workspace
+if [ -f /workspaces/isaac_ros-dev/install/setup.bash ]; then
+  source /workspaces/isaac_ros-dev/install/setup.bash
+fi
+
+# Try to set permissions (may fail silently if container doesn't have privileges)
+if [ -e /dev/ttyACM0 ]; then
+  echo "Setting permissions for /dev/ttyACM0"
+  chmod 666 /dev/ttyACM0 || echo "⚠️ Failed to chmod /dev/ttyACM0 (need --privileged?)"
+else
+  echo "⚠️ /dev/ttyACM0 not found"
+fi
+
 exec gosu ${USERNAME} "$@"
