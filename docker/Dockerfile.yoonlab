@@ -4,13 +4,6 @@
 ARG BASE_IMAGE=ubuntu:22.04
 FROM ${BASE_IMAGE}
 
-# NV blox Installation
-RUN apt update && \
-    apt-get install -y ros-humble-isaac-ros-nvblox && \
-    rosdep update && \
-    rosdep install isaac_ros_nvblox
-
-
 ## Compile & Install YDLidar SDK
 RUN apt install cmake pkg-config
 RUN apt-get install python3 swig
@@ -31,6 +24,37 @@ RUN pip3 install pyserial
 
 ## Install nano
 RUN apt-get install nano
+
+### Install NAV2 BRINGUP
+RUN apt update
+RUN apt install ros-humble-nav2-bringup
+
+### Install the essenstial ISAAC ROS Packages Permanent ###
+### - Isaac ROS common 
+### - Isaac NVBlox
+# Set workspace environment variable early
+ENV ISAAC_ROS_WS=/workspaces/isaac_ros-img
+
+# Create workspace directory
+WORKDIR ${ISAAC_ROS_WS}/src
+
+# Clone Isaac ROS NVBlox and Common (with correct branch and submodules)
+RUN git clone --recurse-submodules https://github.com/stargaze221/isaac_ros_nvblox.git && \
+    git clone -b release-3.2 https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common.git
+
+# Go back to workspace root
+WORKDIR ${ISAAC_ROS_WS}
+
+# Install system dependencies
+RUN apt-get update && \
+    rosdep update && \
+    rosdep install --from-paths src --ignore-src -r -y --rosdistro humble
+
+# Build the workspace using a login shell to source ROS properly
+RUN bash -c "source /opt/ros/humble/setup.bash && \
+             colcon build --symlink-install"
+### ---------------------------------------------------------
+
 
 ## Update the entrypoint.sh
 COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
