@@ -71,4 +71,12 @@ else
   echo "⚠️ /dev/ttyACM0 not found"
 fi
 
+# Try to set permissions (may fail silently if container doesn't have privileges)
+if [ -e /dev/ttyACM0 ]; then
+  echo "Setting permissions for /dev/ttyUSB0"
+  chmod 666 /dev/ttyUSB0 || echo "⚠️ Failed to chmod /dev/ttyUSB0 (need --privileged?)"
+else
+  echo "⚠️ /dev/ttyUSB0 not found"
+fi
+
 exec gosu ${USERNAME} "$@"
