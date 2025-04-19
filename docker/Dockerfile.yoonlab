@@ -50,11 +50,23 @@ RUN apt-get update && \
     rosdep update && \
     rosdep install --from-paths src --ignore-src -r -y --rosdistro humble
 
-# Build the workspace using a login shell to source ROS properly
-RUN bash -c "source /opt/ros/humble/setup.bash && \
-             colcon build --symlink-install"
+# # Build the workspace using a login shell to source ROS properly
+# RUN bash -c "source /opt/ros/humble/setup.bash && \
+#              colcon build --symlink-install"
 ### ---------------------------------------------------------
 
+# For USB Resetting for Realsense Power Reset
+RUN apt-get update && \
+apt-get install -y uhubctl
+RUN apt install -y usbutils
+
+# Build and install usbreset
+WORKDIR /tmp
+RUN wget https://raw.githubusercontent.com/jkulesza/usbreset/master/usbreset.c && \
+    gcc usbreset.c -o usbreset && \
+    mv usbreset /usr/local/bin/ && \
+    chmod 755 /usr/local/bin/usbreset && \
+    rm usbreset.c
 
 ## Update the entrypoint.sh
 COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
