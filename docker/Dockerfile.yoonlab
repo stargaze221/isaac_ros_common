@@ -9,6 +9,10 @@ RUN apt install cmake pkg-config
 RUN apt-get install python3 swig
 RUN apt-get install -y python-pip
 
+
+# Create workspace directory
+WORKDIR /
+
 # Adding the YD Lidar SDK
 RUN git clone https://github.com/g0rd0n2007/YDLidar-SDK.git
 RUN cd YDLidar-SDK && mkdir build && cd build && cmake .. && make && sudo make install
