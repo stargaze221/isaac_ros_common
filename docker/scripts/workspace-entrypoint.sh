@@ -57,4 +57,6 @@ done
 # Restart udev daemon
 service udev restart
 
+source install/setup.bash
+
 exec gosu ${USERNAME} "$@"
