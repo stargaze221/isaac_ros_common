@@ -1,0 +1,81 @@
+# Base image
+ARG BASE_IMAGE=ubuntu:22.04
+FROM ${BASE_IMAGE}
+
+# Set workspace environment variable early
+ENV ISAAC_ROS_WS=/workspaces/isaac_ros-img
+
+# Install essential tools and ROS build dependencies
+RUN apt-get update && \
+    apt-get install -y \
+        build-essential \
+        gcc \
+        curl \
+        git \
+        nano \
+        usbutils \
+        uhubctl \
+        wget \
+        lsb-release \
+        gnupg2 \
+        locales \
+        python3-pip \
+        python3-colcon-common-extensions && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set locale
+RUN locale-gen en_US en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Fix missing magic_enum package for arm64
+RUN wget http://packages.ros.org/ros2/ubuntu/pool/main/r/ros-humble-magic-enum/ros-humble-magic-enum_0.9.5-1jammy.20250522.050315_arm64.deb && \
+    dpkg -i ros-humble-magic-enum_0.9.5-1jammy.20250522.050315_arm64.deb || true && \
+    apt-get install -f -y && \
+    rm ros-humble-magic-enum_0.9.5-1jammy.20250522.050315_arm64.deb
+
+# Install Python packages
+RUN pip3 install --no-cache-dir \
+        pyserial \
+        git+https://github.com/LiamBindle/PyVESC.git
+
+# Create workspace and clone repositories
+WORKDIR ${ISAAC_ROS_WS}/src
+
+RUN git clone --recurse-submodules https://github.com/stargaze221/isaac_ros_nvblox.git && \
+    git clone -b release-3.2 https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common.git && \
+    git clone -b humble --depth=1 https://github.com/ros-planning/navigation2.git && \
+    mv navigation2/nav2_mppi_controller isaac_ros_nvblox/nav2_mppi_controller && \
+    rm -rf navigation2
+
+# Install ROS dependencies
+WORKDIR ${ISAAC_ROS_WS}
+RUN apt-get update && \
+    rosdep update && \
+    rosdep install --from-paths src --ignore-src -r -y --rosdistro humble
+
+# Set safe ARM64 build flags
+ENV CMAKE_CXX_FLAGS="-march=armv8-a+simd"
+
+# Build only MPPI to avoid NVBlox CUDA issues
+RUN . /opt/ros/humble/setup.sh && \
+    colcon build \
+        --packages-select nav2_mppi_controller \
+        --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        --executor sequential
+
+# Build and install usbreset tool
+RUN apt-get update && \
+    apt-get install -y gcc wget && \
+    wget -O /tmp/usbreset.c https://raw.githubusercontent.com/jkulesza/usbreset/master/usbreset.c && \
+    gcc /tmp/usbreset.c -o /usr/local/bin/usbreset && \
+    chmod 755 /usr/local/bin/usbreset && \
+    rm -rf /tmp/*
+
+# Add entrypoint script
+COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
+RUN chmod +x /usr/local/bin/scripts/*.sh
+
+# Set default working directory
+WORKDIR ${ISAAC_ROS_WS}
