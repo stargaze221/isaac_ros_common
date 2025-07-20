@@ -280,26 +280,18 @@ print_info "Running $CONTAINER_NAME"
 if [[ $VERBOSE -eq 1 ]]; then
     set -x
 fi
+
 docker run -it --rm \
     --privileged \
     --network host \
     --ipc=host \
-    --device /dev/gpiomem \
-    --device /dev/mem \
     ${DOCKER_ARGS[@]} \
     -v $ISAAC_ROS_DEV_DIR:/workspaces/isaac_ros-dev \
     -v /etc/localtime:/etc/localtime:ro \
-    -v /dev/ttyUSB0:/dev/ttyUSB0:rw \
-    -v /dev:/dev \
-    -v /sys:/sys \
-    -v /proc/device-tree/compatible:/proc/device-tree/compatible \
-    -v /proc/device-tree/chosen:/proc/device-tree/chosen \
-    -e JETSON_MODEL_NAME=JETSON_ORIN_NANO \
-    --device /dev/gpiochip0 \
+    -v /dev:/host_dev \
     --name "$CONTAINER_NAME" \
     --runtime nvidia \
     --entrypoint /usr/local/bin/scripts/workspace-entrypoint.sh \
     --workdir /workspaces/isaac_ros-dev \
-    --group-add dialout \
     $BASE_NAME \
     /bin/bash
