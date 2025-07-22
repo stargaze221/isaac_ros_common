@@ -285,6 +285,7 @@ docker run -it --rm \
     --privileged \
     --network host \
     --ipc=host \
+    -e ROS_DOMAIN_ID=10 \
     ${DOCKER_ARGS[@]} \
     -v $ISAAC_ROS_DEV_DIR:/workspaces/isaac_ros-dev \
     -v /etc/localtime:/etc/localtime:ro \

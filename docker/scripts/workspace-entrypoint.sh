@@ -67,4 +67,6 @@ if [ -f /workspaces/isaac_ros-img/install/setup.bash ]; then
   source /workspaces/isaac_ros-img/install/setup.bash
 fi
 
+export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-10}  # Default to 10 if not set externally
+
 exec gosu ${USERNAME} "$@"
