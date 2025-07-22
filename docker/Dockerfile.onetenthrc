@@ -73,7 +73,20 @@ RUN apt-get update && \
     chmod 755 /usr/local/bin/usbreset && \
     rm -rf /tmp/*
 
+# Adding the YD Lidar SDK
+WORKDIR /
+RUN apt-get update
+RUN apt install cmake pkg-config
+RUN apt-get install python3 swig
+RUN apt-get install -y python-pip
+
+# Adding the YD Lidar SDK
+RUN git clone https://github.com/g0rd0n2007/YDLidar-SDK.git
+RUN cd YDLidar-SDK && mkdir build && cd build && cmake .. && make && sudo make install
+RUN cd /YDLidar-SDK && python setup.py build && python setup.py install
+
 # Add entrypoint script
+# ...
 COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
 RUN chmod +x /usr/local/bin/scripts/*.sh
 
