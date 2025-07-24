@@ -61,6 +61,15 @@ RUN apt-get update && \
     chmod 755 /usr/local/bin/usbreset && \
     rm -rf /tmp/*
 
+
+# Copy and install the Python wheel for CARLA PYTHON API
+COPY carla-0.9.15-cp310-cp310-linux_x86_64.whl /tmp/  
+RUN pip install /tmp/carla-0.9.15-cp310-cp310-linux_x86_64.whl
+
+# Install additional Python packages
+RUN pip install pygame
+
+
 # Copy entrypoint script
 COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
 RUN chmod +x /usr/local/bin/scripts/*.sh || true
