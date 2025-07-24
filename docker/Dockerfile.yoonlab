@@ -68,7 +68,8 @@ RUN pip install /tmp/carla-0.9.15-cp310-cp310-linux_x86_64.whl
 
 # Install additional Python packages
 RUN pip install pygame
-
+RUN pip install posix_ipc
+RUN apt-get install -y gdb
 
 # Copy entrypoint script
 COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
