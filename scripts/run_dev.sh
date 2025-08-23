@@ -275,6 +275,12 @@ if [[ -f "${DOCKER_ARGS_FILEPATH}" ]]; then
     done
 fi
 
+
+# Middleware settings
+RMW_IMPL="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
+ROS_DOMAIN="${ROS_DOMAIN_ID:-0}"
+
+
 # Run container from image
 print_info "Running $CONTAINER_NAME"
 if [[ $VERBOSE -eq 1 ]]; then
@@ -285,6 +291,8 @@ docker run -it --rm \
     --network host \
     --ipc=host \
     ${DOCKER_ARGS[@]} \
+    -e ROS_DOMAIN_ID=$ROS_DOMAIN \
+    -e RMW_IMPLEMENTATION=$RMW_IMPL \
     -v $ISAAC_ROS_DEV_DIR:/workspaces/isaac_ros-dev \
     -v /etc/localtime:/etc/localtime:ro \
     --name "$CONTAINER_NAME" \
