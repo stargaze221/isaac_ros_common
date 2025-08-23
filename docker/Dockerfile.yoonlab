@@ -1,8 +1,11 @@
-#
+
 # We can add customizations to the base image here.
 #
-ARG BASE_IMAGE=ubuntu:22.04
-FROM ${BASE_IMAGE}
+# ARG BASE_IMAGE=ubuntu:22.04
+# FROM ${BASE_IMAGE}
+# Yoonlab custom layer
+FROM realsense-image:latest
+
 
 # Set workspace environment variable early
 ENV ISAAC_ROS_WS=/workspaces/isaac_ros-img
@@ -61,16 +64,35 @@ RUN apt-get update && \
     chmod 755 /usr/local/bin/usbreset && \
     rm -rf /tmp/*
 
-
 # Copy and install the Python wheel for CARLA PYTHON API
 COPY carla-0.9.15-cp310-cp310-linux_x86_64.whl /tmp/  
 RUN pip install /tmp/carla-0.9.15-cp310-cp310-linux_x86_64.whl
 
-# Install additional Python packages
-RUN pip install pygame
-RUN pip install posix_ipc
-RUN apt-get install -y gdb
-RUN pip install transforms3d
-# Copy entrypoint script
+# Install additional Python packages and gdb
+RUN apt-get update && apt-get install -y gdb && \
+    pip install --no-cache-dir pygame posix_ipc transforms3d && \
+    rm -rf /var/lib/apt/lists/*
+
+
+# --- ORB-SLAM3 Dependencies ---
+WORKDIR /opt
+RUN git clone https://github.com/stevenlovegrove/Pangolin.git && cd Pangolin && \
+    mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc) && make install && \
+    git clone https://github.com/RainerKuemmerle/g2o.git && cd g2o && \
+    mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc) && make install && \
+    git clone https://github.com/dorian3d/DLib.git && cd DLib && \
+    mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc) && make install && \
+    git clone https://github.com/dorian3d/DBoW2.git && cd DBoW2 && \
+    mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc) && make install && \
+    ldconfig
+
+# --- ORB-SLAM3 Vocabulary ---
+RUN mkdir -p /opt/orbslam3/Vocabulary && \
+    wget -O /opt/orbslam3/Vocabulary/ORBvoc.txt.tar.gz \
+        https://github.com/UZ-SLAMLab/ORB_SLAM3/raw/master/Vocabulary/ORBvoc.txt.tar.gz && \
+    tar -xvzf /opt/orbslam3/Vocabulary/ORBvoc.txt.tar.gz -C /opt/orbslam3/Vocabulary && \
+    rm /opt/orbslam3/Vocabulary/ORBvoc.txt.tar.gz
+
+# Entrypoint
 COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
 RUN chmod +x /usr/local/bin/scripts/*.sh || true
