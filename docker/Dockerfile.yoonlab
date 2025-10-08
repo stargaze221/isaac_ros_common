@@ -4,10 +4,77 @@
 ARG BASE_IMAGE=ubuntu:22.04
 FROM ${BASE_IMAGE}
 
-## Install nano
-RUN apt-get update
-RUN apt-get install nano
+
+
+
+##################################################################
+# Base image
+ARG BASE_IMAGE=ubuntu:22.04
+FROM ${BASE_IMAGE}
+
+# Set workspace environment variable early
+ENV ISAAC_ROS_WS=/workspaces/isaac_ros-img
+
+# Install essential tools and ROS build dependencies
+RUN apt-get update && \
+    apt-get install -y \
+        build-essential \
+        gcc \
+        curl \
+        git \
+        nano \
+        usbutils \
+        uhubctl \
+        wget \
+        lsb-release \
+        gnupg2 \
+        locales \
+        python3-pip \
+        python3-colcon-common-extensions && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set locale
+RUN locale-gen en_US en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+
+# Fix missing magic_enum package for arm64 if not available via apt
+RUN set -eux; \
+    if ! apt-cache show ros-humble-magic-enum >/dev/null 2>&1; then \
+        apt-get update; \
+        apt-get install -y --no-install-recommends wget; \
+        wget -q http://packages.ros.org/ros2/ubuntu/pool/main/r/ros-humble-magic-enum/ros-humble-magic-enum_0.9.5-1jammy.20250522.050315_arm64.deb -O /tmp/magic_enum.deb || \
+        apt-get download ros-humble-magic-enum; \
+        apt-get install -y --no-install-recommends /tmp/magic_enum.deb || apt-get -f install -y; \
+        rm -f /tmp/magic_enum.deb; \
+    else \
+        echo "ros-humble-magic-enum already available in apt repository"; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
+
+    
+# Create workspace and clone repositories
+WORKDIR ${ISAAC_ROS_WS}/src
+
+RUN git clone --recurse-submodules https://github.com/stargaze221/isaac_ros_nvblox.git && \
+    git clone -b release-3.2 https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common.git && \
+    git clone -b humble --depth=1 https://github.com/ros-planning/navigation2.git && \
+    mv navigation2/nav2_mppi_controller isaac_ros_nvblox/nav2_mppi_controller && \
+    rm -rf navigation2
+
+# Install ROS dependencies
+WORKDIR ${ISAAC_ROS_WS}
+RUN apt-get update && \
+    rosdep update && \
+    rosdep install --from-paths src --ignore-src -r -y --rosdistro humble
 
 ## Update the entrypoint.sh
 COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
 RUN chmod +x /usr/local/bin/scripts/*.sh || true
+
+# Set default working directory
+WORKDIR ${ISAAC_ROS_WS}
+
+
