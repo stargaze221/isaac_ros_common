@@ -29,11 +29,6 @@ RUN locale-gen en_US en_US.UTF-8
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
-# Fix missing magic_enum package for arm64
-RUN wget http://packages.ros.org/ros2/ubuntu/pool/main/r/ros-humble-magic-enum/ros-humble-magic-enum_0.9.5-1jammy.20250522.050315_arm64.deb && \
-    dpkg -i ros-humble-magic-enum_0.9.5-1jammy.20250522.050315_arm64.deb || true && \
-    apt-get install -f -y && \
-    rm ros-humble-magic-enum_0.9.5-1jammy.20250522.050315_arm64.deb
 
 # Install Python packages
 RUN pip3 install --no-cache-dir \
