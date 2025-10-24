@@ -1,14 +1,15 @@
-#  
+#
 # We can add customizations to the base image here.
 #
 ARG BASE_IMAGE=ubuntu:22.04
 FROM ${BASE_IMAGE}
 
 ## Install nano
-RUN apt-get update
-RUN apt-get install nano
+RUN apt-get update && apt-get install -y nano
 
-# Update and install minimal tools
+# --------------------------------------------------
+# Install Python tools and dependencies
+# --------------------------------------------------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         python3 \
@@ -24,6 +25,24 @@ RUN apt-get update && \
 # --------------------------------------------------
 RUN pip install --no-cache-dir pymycobot
 
-## Update the entrypoint.sh
+# --------------------------------------------------
+# Install Pinocchio (ROS 2 Humble prebuilt)
+# --------------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ros-humble-pinocchio && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# --------------------------------------------------
+# Install MeshCat (visualization) and CasADi (optimization)
+# --------------------------------------------------
+RUN pip install --no-cache-dir \
+        meshcat \
+        casadi && \
+    pip install --no-cache-dir "numpy<2"  # ensure compatibility with Pinocchio bindings
+
+# --------------------------------------------------
+# Update entrypoint
+# --------------------------------------------------
 COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
 RUN chmod +x /usr/local/bin/scripts/*.sh || true
