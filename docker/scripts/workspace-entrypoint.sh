@@ -57,4 +57,8 @@ done
 # Restart udev daemon
 service udev restart
 
-exec gosu ${USERNAME} "$@"
+# Ensure Python path persists after switching to non-root user
+exec env PYTHONPATH="/usr/local/lib/python3.10/site-packages:${PYTHONPATH}" gosu ${USERNAME} "$@"
+
+# exec gosu ${USERNAME} "$@"
+
