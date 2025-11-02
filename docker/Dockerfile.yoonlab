@@ -1,5 +1,5 @@
 #
-# Custom base image for MyCobot + Pinocchio + CasADi
+# Custom base image for MyCobot + Pinocchio + CasADi (ROS-compatible)
 #
 ARG BASE_IMAGE=ubuntu:22.04
 FROM ${BASE_IMAGE}
@@ -8,21 +8,25 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/bin:${PATH}"
 
 # --------------------------------------------------
-# System setup: basic utilities
+# System setup: basic utilities + Python + core deps
 # --------------------------------------------------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        nano git wget curl ca-certificates gnupg2 build-essential && \
+        nano git wget curl ca-certificates gnupg2 build-essential \
+        python3 python3-pip python3-serial python3-numpy python3-dev \
+        libeigen3-dev libboost-all-dev \
+        liburdfdom-headers-dev liburdfdom-dev \
+        libassimp-dev libtinyxml2-dev pkg-config \
+        swig gfortran && \
     rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
-# Python and core dependencies
+# Install stable ROS-compatible CMake (3.22–3.24)
 # --------------------------------------------------
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        python3 python3-pip python3-serial python3-numpy python3-dev \
-        libeigen3-dev libboost-all-dev && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends cmake && \
+    cmake --version && \
+    rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
 # MyCobot Python API
@@ -36,36 +40,11 @@ RUN apt-get remove -y python3-casadi ros-humble-pinocchio || true && \
     rm -rf /usr/lib/python3/dist-packages/casadi*
 
 # --------------------------------------------------
-# Rebuild and install CMake (v3.29.3)
-# --------------------------------------------------
-ARG CMAKE_FORCE_REBUILD=1
-RUN echo "Rebuilding CMake layer at $(date)" && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        wget build-essential libssl-dev libcurl4-openssl-dev && \
-    wget -q https://github.com/Kitware/CMake/releases/download/v3.29.3/cmake-3.29.3.tar.gz && \
-    tar -xzf cmake-3.29.3.tar.gz && cd cmake-3.29.3 && \
-    ./bootstrap --prefix=/usr && make -j"$(nproc)" && make install && \
-    cmake --version && \
-    cd / && rm -rf cmake-3.29.3* /var/lib/apt/lists/*
-
-# --------------------------------------------------
-# Pinocchio build prerequisites
-# --------------------------------------------------
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        liburdfdom-headers-dev liburdfdom-dev \
-        libassimp-dev libtinyxml2-dev pkg-config && \
-    rm -rf /var/lib/apt/lists/*
-
-# --------------------------------------------------
 # Build EigenPy (Python bindings for Eigen)
 # --------------------------------------------------
 RUN git clone --recursive https://github.com/stack-of-tasks/eigenpy.git /tmp/eigenpy && \
     cd /tmp/eigenpy && mkdir build && cd build && \
-    cmake .. \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DPYTHON_EXECUTABLE=$(which python3) && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=$(which python3) && \
     make -j"$(nproc)" && make install && \
     cd / && rm -rf /tmp/eigenpy
 
@@ -73,7 +52,6 @@ RUN git clone --recursive https://github.com/stack-of-tasks/eigenpy.git /tmp/eig
 # Build CasADi 3.6.3 from source (Python + headers)
 # --------------------------------------------------
 RUN set -e && \
-    apt-get update && apt-get install -y --no-install-recommends swig gfortran python3-dev && \
     git clone --branch 3.6.3 --depth 1 https://github.com/casadi/casadi.git /tmp/casadi && \
     cd /tmp/casadi && mkdir build && cd build && \
     cmake .. -DWITH_PYTHON=ON -DWITH_CASADITOOLS=ON -DWITH_DL=ON \
@@ -82,37 +60,34 @@ RUN set -e && \
     \
     echo "---- Checking CasADi headers after installation ----" && \
     if [ -d "/usr/local/include/casadi" ]; then \
-        echo "✅ Headers successfully installed to /usr/local/include/casadi"; \
+        echo "✅ Headers installed to /usr/local/include/casadi"; \
     elif [ -d "/usr/local/lib/python3.10/site-packages/casadi/include" ]; then \
-        echo "✅ Headers found in site-packages. Copying to /usr/local/include/casadi"; \
+        echo "✅ Headers found in site-packages → copying"; \
         mkdir -p /usr/local/include/casadi && \
         cp -r /usr/local/lib/python3.10/site-packages/casadi/include/* /usr/local/include/casadi/; \
     elif [ -d "/tmp/casadi/build/include/casadi" ]; then \
-        echo "✅ Headers found in build/include. Copying to /usr/local/include/casadi"; \
+        echo "✅ Headers found in build/include → copying"; \
         mkdir -p /usr/local/include/casadi && \
         cp -r /tmp/casadi/build/include/casadi/* /usr/local/include/casadi/; \
     elif [ -d "/tmp/casadi/include/casadi" ]; then \
-        echo "✅ Headers found in source/include. Copying to /usr/local/include/casadi"; \
+        echo "✅ Headers found in source/include → copying"; \
         mkdir -p /usr/local/include/casadi && \
         cp -r /tmp/casadi/include/casadi/* /usr/local/include/casadi/; \
     else \
-        echo "❌ ERROR: CasADi headers not found in any expected location!" && \
-        echo "Build will stopythonp. Check CasADi build and install paths." && \
-        exit 1; \
+        echo "❌ ERROR: CasADi headers not found; check build paths." && exit 1; \
     fi && \
     echo "CasADi header files now in /usr/local/include/casadi:" && \
     ls -1 /usr/local/include/casadi | head && \
-    echo "----------------------------------------------------" && \
-    cd / && rm -rf /tmp/casadi /var/lib/apt/lists/*
+    rm -rf /tmp/casadi /var/lib/apt/lists/*
 
 # --------------------------------------------------
 # Setup CasADi pkg-config file for CMake discovery
 # --------------------------------------------------
 RUN set -e && \
     mkdir -p /usr/local/lib/pkgconfig && \
-    echo "prefix=/usr/local\nexec_prefix=\${prefix}\nincludedir=\${prefix}/include\nlibdir=\${exec_prefix}/lib\n\nName: casadi\nDescription: CasADi symbolic framework\nVersion: 3.6.3\nCflags: -I\${includedir}/casadi\nLibs: -L\${libdir} -lcasadi" > /usr/local/lib/pkgconfig/casadi.pc && \
+    echo "prefix=/usr/local\nexec_prefix=\${prefix}\nincludedir=\${prefix}/include\nlibdir=\${exec_prefix}/lib\n\nName: casadi\nDescription: CasADi symbolic framework\nVersion: 3.6.3\nCflags: -I\${includedir}/casadi\nLibs: -L\${libdir} -lcasadi" \
+      > /usr/local/lib/pkgconfig/casadi.pc && \
     echo "✅ Created /usr/local/lib/pkgconfig/casadi.pc"
-
 
 # --------------------------------------------------
 # Build and install Pinocchio v3.2.0 (with CasADi + Python bindings)
@@ -127,6 +102,8 @@ RUN set -e && \
     PKG_CONFIG_PATH=/usr/local/lib/pkgconfig cmake .. \
         -DCMAKE_BUILD_TYPE=Release \
         -DPYTHON_EXECUTABLE=$(which python3) \
+        -DPYTHON_SITE_INSTALL_DIR=/usr/local/lib/python3.10/site-packages \
+        -DPINOCCHIO_WITH_CASADI=ON \
         -DBUILD_WITH_CASADI_SUPPORT=ON \
         -DPINOCCHIO_WITH_PYTHON_BINDINGS=ON \
         -DCMAKE_PREFIX_PATH=/usr/local \
@@ -135,19 +112,17 @@ RUN set -e && \
     make -j"$(nproc)" && make install && \
     cd / && rm -rf /tmp/pinocchio /var/lib/apt/lists/*
 
+# --------------------------------------------------
+# Environment for ROS/Isaac ROS builds
+# --------------------------------------------------
+ENV CMAKE_PREFIX_PATH="/usr/local:${CMAKE_PREFIX_PATH}"
+ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"
+ENV PYTHONPATH="/usr/local/lib/python3.10/site-packages:${PYTHONPATH}"
 
 # --------------------------------------------------
-# Ensure Python can import Pinocchio + CasADi bindings
+# Verify Python bindings
 # --------------------------------------------------
-RUN set -e && \
-    PYTHON_SITE=$(python3 -c "import site; print(site.getsitepackages()[0])") && \
-    if [ ! -d "$PYTHON_SITE/pinocchio" ]; then \
-        echo "🔧 Copying Pinocchio bindings into $PYTHON_SITE"; \
-        cp -r /usr/local/lib/python3.10/site-packages/pinocchio "$PYTHON_SITE"/; \
-    fi && \
-    echo "Verifying Python import..." && \
-    python3 -c "import pinocchio; from pinocchio import casadi; print('✅ pinocchio.casadi OK')"
-
+RUN python3 -c "import casadi, pinocchio; from pinocchio import casadi as pc; print('✅ CasADi', casadi.__version__, '| Pinocchio.casadi OK')"
 
 # --------------------------------------------------
 # Visualization tools
@@ -157,6 +132,6 @@ RUN pip install --no-cache-dir meshcat matplotlib
 # --------------------------------------------------
 # Entrypoint
 # --------------------------------------------------
-COPY scripts/workspace-entrypoint.sh /usr/local/bin/scripts/
-RUN chmod +x /usr/local/bin/scripts/*.sh
-ENTRYPOINT ["/usr/local/bin/scripts/workspace-entrypoint.sh"]
+COPY scripts/workspace-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/workspace-entrypoint.sh
+ENTRYPOINT ["workspace-entrypoint.sh"]
