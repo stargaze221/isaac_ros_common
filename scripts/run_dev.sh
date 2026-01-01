@@ -281,11 +281,12 @@ if [[ $VERBOSE -eq 1 ]]; then
     set -x
 fi
 
+
 # docker run -it --rm \
 #     --privileged \
 #     --network host \
 #     --ipc=host \
-#     ${DOCKER_ARGS[@]} \
+#      ${DOCKER_ARGS[@]} \
 #     -v $ISAAC_ROS_DEV_DIR:/workspaces/isaac_ros-dev \
 #     -v /etc/localtime:/etc/localtime:ro \
 #     -v /dev:/host_dev \
@@ -296,15 +297,16 @@ fi
 #     $BASE_NAME \
 #     /bin/bash
 
-
 docker run -it --rm \
     --privileged \
     --network host \
     --ipc=host \
-     ${DOCKER_ARGS[@]} \
+    --cap-add=NET_RAW \
+    --cap-add=NET_ADMIN \
+    ${DOCKER_ARGS[@]} \
     -v $ISAAC_ROS_DEV_DIR:/workspaces/isaac_ros-dev \
     -v /etc/localtime:/etc/localtime:ro \
-    -v /dev:/host_dev \
+    -v /dev:/dev \
     --name "$CONTAINER_NAME" \
     --runtime nvidia \
     --entrypoint /usr/local/bin/scripts/workspace-entrypoint.sh \
