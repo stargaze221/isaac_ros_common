@@ -57,4 +57,14 @@ done
 # Restart udev daemon
 service udev restart
 
+# If you built a local workspace
+if [ -f /workspaces/isaac_ros-dev/install/setup.bash ]; then
+  source /workspaces/isaac_ros-dev/install/setup.bash
+fi
+
+# Source MPPI (isaac_ros-img) workspace if built
+if [ -f /workspaces/isaac_ros-img/install/setup.bash ]; then
+  source /workspaces/isaac_ros-img/install/setup.bash
+fi
+
 exec gosu ${USERNAME} "$@"
