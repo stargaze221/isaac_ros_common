@@ -1,6 +1,18 @@
-# =====================================================================
-# Isaac ROS-compatible Dockerfile with preinstalled ZED SDK + rosdep deps
-# =====================================================================
+# ==============================================================================
+# Docker from Base Image from CONFIG_IMAGE_KEY=ros2_humble.realsense
+#
+# Included:
+#   - Ubuntu 22.04
+#   - ZED SDK (Jetson / L4T 36.4)
+#   - ZED ROS 2 Wrapper + Examples
+#   - Isaac ROS NVBlox (custom fork)
+#   - Nav2 MPPI controller integration
+#   - MAVROS + GeographicLib
+#   - SocketCAN diagnostics + python-can
+#
+# Target:
+#   Jetson (ARM64), ROS 2 Humble, Isaac ROS development
+# ==============================================================================
 
 ARG BASE_IMAGE=ubuntu:22.04
 FROM ${BASE_IMAGE}
@@ -8,115 +20,146 @@ FROM ${BASE_IMAGE}
 SHELL ["/bin/bash", "-c"]
 
 # ------------------------------------------------------------------------------
-# 0. Environment setup
+# Global environment
 # ------------------------------------------------------------------------------
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO=humble
+
 ENV ISAAC_ROS_WS=/workspaces/isaac_ros-dev
 ENV ISAAC_ROS_IMG=/workspaces/isaac_ros-img
 ENV ROS_ROOT=${ISAAC_ROS_WS}
 
 # ------------------------------------------------------------------------------
-# 1. Base system setup
+# 1. Core OS utilities (minimal, non-GUI)
 # ------------------------------------------------------------------------------
 RUN apt-get update -y \
     -o Acquire::AllowReleaseInfoChange::Origin=true \
     -o Acquire::AllowReleaseInfoChange::Label=true && \
-    apt-get install --no-install-recommends -y \
-        lsb-release wget less zstd udev sudo apt-transport-https git curl gnupg2 && \
+    apt-get install -y --no-install-recommends \
+        lsb-release \
+        wget \
+        curl \
+        less \
+        zstd \
+        udev \
+        sudo \
+        git \
+        gnupg2 \
+        apt-transport-https && \
     rm -rf /var/lib/apt/lists/*
 
 # ------------------------------------------------------------------------------
-# 2. Install ZED SDK (Jetson / ARM64, JetPack 6 / L4T 36.4)
+# 2. ZED SDK installation
+#    Target: Jetson / ARM64, JetPack 6 (L4T 36.4)
 # ------------------------------------------------------------------------------
 WORKDIR /tmp
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends lsb-release wget less zstd udev sudo apt-transport-https && \
+    apt-get install -y --no-install-recommends \
+        lsb-release \
+        wget \
+        less \
+        zstd \
+        udev \
+        sudo \
+        apt-transport-https && \
+    \
     wget -q --no-check-certificate -O ZED_SDK_Linux.run \
         https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/4.2/ZED_SDK_Tegra_L4T36.4_v4.2.2.zstd.run && \
     chmod +x ZED_SDK_Linux.run && \
-    ./ZED_SDK_Linux.run silent skip_od_module skip_python skip_drivers && \
-    ln -sf /usr/lib/aarch64-linux-gnu/tegra/libv4l2.so.0 /usr/lib/aarch64-linux-gnu/libv4l2.so && \
+    \
+    ./ZED_SDK_Linux.run silent \
+        skip_od_module \
+        skip_python \
+        skip_drivers && \
+    \
+    # Workaround: expected libv4l2 path
+    ln -sf /usr/lib/aarch64-linux-gnu/tegra/libv4l2.so.0 \
+           /usr/lib/aarch64-linux-gnu/libv4l2.so && \
+    \
     rm -f ZED_SDK_Linux.run && \
-    mkdir -p /usr/local/zed/settings && chmod -R a+rwx /usr/local/zed
+    mkdir -p /usr/local/zed/settings && \
+    chmod -R a+rwx /usr/local/zed
 
+# Optional video encoding support (used by some ZED tools)
 RUN apt-get update && \
-    apt-get install -y ffmpeg libx264-dev && \
+    apt-get install -y --no-install-recommends \
+        ffmpeg \
+        libx264-dev && \
     rm -rf /var/lib/apt/lists/*
 
-
 # ------------------------------------------------------------------------------
-# 3. Clone ZED ROS 2 wrapper repository
+# 3. Source workspace population
 # ------------------------------------------------------------------------------
 WORKDIR ${ISAAC_ROS_IMG}/src
-RUN git clone --recurse-submodules -b humble-v4.2.5 \
-      https://github.com/stereolabs/zed-ros2-wrapper.git
 
+# --- ZED ROS 2 wrapper (fixed version for Humble) ---
+RUN git clone --recurse-submodules \
+        -b humble-v4.2.5 \
+        https://github.com/stereolabs/zed-ros2-wrapper.git
 
-RUN git clone --recurse-submodules https://github.com/stargaze221/isaac_ros_nvblox.git && \
-    git clone -b release-3.2 https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common.git && \
-    git clone -b humble --depth=1 https://github.com/ros-planning/navigation2.git && \
-    mv navigation2/nav2_mppi_controller isaac_ros_nvblox/nav2_mppi_controller && \
+# --- ZED ROS 2 examples (reference + testing) ---
+RUN git clone https://github.com/stereolabs/zed-ros2-examples.git
+
+# --- Isaac ROS NVBlox (custom fork) ---
+# --- Nav2 MPPI controller extraction ---
+RUN git clone --recurse-submodules \
+        https://github.com/stargaze221/isaac_ros_nvblox.git && \
+    \
+    git clone -b release-3.2 \
+        https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common.git && \
+    \
+    git clone -b humble --depth=1 \
+        https://github.com/ros-planning/navigation2.git && \
+    \
+    mv navigation2/nav2_mppi_controller \
+       isaac_ros_nvblox/nav2_mppi_controller && \
     rm -rf navigation2
 
 # ------------------------------------------------------------------------------
-# 4. Install ROS 2 build utilities and dependencies
+# 4. ROS dependency resolution (rosdep)
 # ------------------------------------------------------------------------------
 WORKDIR ${ISAAC_ROS_IMG}
+
 RUN apt-get update && \
     rosdep update && \
-    rosdep install --from-paths src --ignore-src -r -y --rosdistro humble
+    rosdep install \
+        --from-paths src \
+        --ignore-src \
+        -r -y \
+        --rosdistro ${ROS_DISTRO}
 
 # ------------------------------------------------------------------------------
-# 4.5 Install MAVROS and GeographicLib (ArduPilot support)
+# 5. MAVROS + GeographicLib (ArduPilot / PX4 support)
 # ------------------------------------------------------------------------------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ros-humble-mavros \
         ros-humble-mavros-extras \
         geographiclib-tools && \
+    \
     geographiclib-get-geoids egm96-5 && \
     rm -rf /var/lib/apt/lists/*
 
-# # ------------------------------------------------------------------------------
-# # 4.8 Install PyVESC (from source, for USB-based VESC control)
-# # ------------------------------------------------------------------------------
-# WORKDIR /opt
-
-# RUN apt-get update && \
-#     apt-get install -y --no-install-recommends \
-#         python3-pip \
-#         python3-setuptools \
-#         python3-wheel \
-#         git && \
-#     rm -rf /var/lib/apt/lists/*
-
-# # PyVESC dependency
-# RUN pip3 install --no-cache-dir pyserial
-
-# # Install PyVESC from authoritative source
-# RUN git clone https://github.com/LiamBindle/PyVESC.git && \
-#     pip3 install --no-cache-dir ./PyVESC && \
-#     rm -rf PyVESC
-
 # ------------------------------------------------------------------------------
-# Install SocketCAN user-space tools (diagnostics only)
+# 6. SocketCAN diagnostics + Python CAN interface
+#    (User-space tools only; kernel drivers handled by host)
 # ------------------------------------------------------------------------------
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    iproute2 \
-    can-utils \
-    python3-pip \
-    python3-setuptools \
-    python3-wheel \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        iproute2 \
+        can-utils \
+        python3-pip \
+        python3-setuptools \
+        python3-wheel && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install python-can (SocketCAN backend)
 RUN pip3 install --no-cache-dir python-can
 
+# ------------------------------------------------------------------------------
+# 7. Final permissions and default workspace
+# ------------------------------------------------------------------------------
+RUN chmod -R a+rX /usr/local/zed && \
+    chmod -R 777 /usr/local/zed/resources || true
 
-# ------------------------------------------------------------------------------
-# 5. Final permissions and working directory
-# ------------------------------------------------------------------------------
-RUN chmod -R a+rX /usr/local/zed && chmod -R 777 /usr/local/zed/resources || true
 WORKDIR ${ISAAC_ROS_WS}
