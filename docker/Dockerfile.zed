@@ -162,4 +162,12 @@ RUN pip3 install --no-cache-dir python-can
 RUN chmod -R a+rX /usr/local/zed && \
     chmod -R 777 /usr/local/zed/resources || true
 
+# ------------------------------------------------------------------------------
+# 8. Status monitoring web server dependencies (FastAPI)
+# ------------------------------------------------------------------------------
+RUN pip3 install --no-cache-dir \
+        fastapi \
+        "uvicorn[standard]" \
+        pydantic
+
 WORKDIR ${ISAAC_ROS_WS}
