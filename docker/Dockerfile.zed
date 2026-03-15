@@ -168,6 +168,7 @@ RUN chmod -R a+rX /usr/local/zed && \
 RUN pip3 install --no-cache-dir \
         fastapi \
         "uvicorn[standard]" \
-        pydantic
+        pydantic \
+        pyserial
 
 WORKDIR ${ISAAC_ROS_WS}

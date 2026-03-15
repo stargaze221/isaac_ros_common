@@ -307,8 +307,10 @@ docker run -it --rm \
     -v $ISAAC_ROS_DEV_DIR:/workspaces/isaac_ros-dev \
     -v /etc/localtime:/etc/localtime:ro \
     -v /dev:/dev \
-    -v ~/.cache/zed:/root/.cache/zed \
-    -v ~/.local/share/zed:/root/.local/share/zed \
+    -v ~/.cache/zed:/home/admin/.cache/zed \
+    -v ~/.local/share/zed:/home/admin/.local/share/zed \
+    -v ~/.zed_docker/resources:/usr/local/zed/resources \
+    -v ~/.zed_docker/settings:/usr/local/zed/settings \
     --name "$CONTAINER_NAME" \
     --runtime nvidia \
     --entrypoint /usr/local/bin/scripts/workspace-entrypoint.sh \
